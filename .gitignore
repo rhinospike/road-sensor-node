@@ -1,3 +1,5 @@
+.syntastic*config
+.ycm_extra_conf.*
 tags
 *.a
 *.bin

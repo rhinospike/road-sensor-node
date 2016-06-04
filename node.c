@@ -98,7 +98,6 @@ status_callback(void *ptr)
 {
 	leds_toggle(LEDS_RED);
   	ctimer_reset(&status_timer);
-	server_conn->ripaddr = NULL;
 	uip_udp_packet_send(server_conn, &localtimeutc, sizeof(uint32_t));
  	PRINTF("UTC: '%lu'\r\n", getUtcTimeFromLocalTime());
 	leds_toggle(LEDS_RED);

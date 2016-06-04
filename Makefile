@@ -1,4 +1,4 @@
-#CONTIKI_PROJECT=udp-client
+CONTIKI_PROJECT=node
 
 all: $(CONTIKI_PROJECT)
 
@@ -21,3 +21,8 @@ prog:
 progu:
 	$(HOME)/uniflash_3.4/uniflash.sh -ccxml ~/Downloads/sensortag.ccxml -targetOp reset -operation Erase
 	$(HOME)/uniflash_3.4/uniflash.sh -ccxml ~/Downloads/sensortag.ccxml -program $(CONTIKI_PROJECT).hex
+
+.PHONY: tags
+tags:
+	ctags -R . $(CONTIKI)
+	$(MAKE) $(CONTIKI_PROJECT) -n | awk '/$(CONTIKI_PROJECT)/{i++}i==2' | sed -e 's/ -/\n-/g' | tail -n +2 > .syntastic_c_config
