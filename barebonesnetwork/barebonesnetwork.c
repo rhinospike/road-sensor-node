@@ -98,6 +98,15 @@ message_in_register(message_id_t *messageId);
 static void
 send_message(message_t *message);
 
+static void
+raw_receiver(struct simple_udp_connection *c,
+		 const uip_ipaddr_t *sender_addr,
+		 uint16_t sender_port,
+		 const uip_ipaddr_t *receiver_addr,
+		 uint16_t receiver_port,
+		 const uint8_t *data,
+		 uint16_t datalen);
+
 /* Array for storing all previously seen ip addresses. Incoming addresses
  * are compared against this array to generate the address alias, since
  * there will be many more packets sent than IP addresses. */
@@ -109,13 +118,35 @@ static uint16_t packetRegisterHead = 0;
 static bool didWrap = false;
 
 static compact_addr_t tagAddress;
+static uint32_t messagesSent = 0;
 
 /*---------------------------------------------------------------------------*/
 PROCESS(broadcast_process, "UDP broadcast example process");
 AUTOSTART_PROCESSES(&resolv_process, &broadcast_process);
 /*---------------------------------------------------------------------------*/
 static void
-receiver(struct simple_udp_connection *c,
+receiver(message_t *message) {
+	/* Process the message */
+	printf("[Recieved] ");
+	print_compact_address(&message->messageId.addr);
+	printf(" ID: %lu, M-Index: %lu Hops: %lu\r\n",
+		message->messageId.id, message->contents, message->hops);
+}
+
+static message_t*
+sender(void) {
+	static 	message_t message;
+
+	message.messageId.id = messagesSent;
+	copy_compact_address(&message.messageId.addr, &tagAddress);
+	message.contents = packetRegisterHead;
+	message.hops = 0; // Hops incremented every time the message is sent.
+
+	return &message;
+}
+/*---------------------------------------------------------------------------*/
+static void
+raw_receiver(struct simple_udp_connection *c,
 		 const uip_ipaddr_t *sender_addr,
 		 uint16_t sender_port,
 		 const uip_ipaddr_t *receiver_addr,
@@ -123,9 +154,7 @@ receiver(struct simple_udp_connection *c,
 		 const uint8_t *data,
 		 uint16_t datalen)
 {
-	message_t *recieved;
-
-	/* Process incoming data */
+	message_t *received;
 
 	if (datalen != sizeof(message_t)) {
 		printf("Incorrect incomign data size\r\n");
@@ -134,16 +163,19 @@ receiver(struct simple_udp_connection *c,
 
 	leds_toggle(LEDS_GREEN);
 
-	recieved = (message_t *)data;
+	received = (message_t *)data;
 
-	printf("[Recieved] ");
-	print_compact_address(&recieved->messageId.addr);
-	printf(" ID: %lu, M-Index: %lu Hops: %lu\r\n",
-		recieved->messageId.id, recieved->contents, recieved->hops);
+	/* Prints all incoming messages including messages already seen that
+	 * should be ignored */
+	// printf("[Recieved] ");
+	// print_compact_address(&received->messageId.addr);
+	// printf(" ID: %lu, M-Index: %lu Hops: %lu\r\n",
+	// 	received->messageId.id, received->contents, received->hops);
 
-	if (!message_in_register(&recieved->messageId)) {
-		printf("*>> Rebroadcasting\r\n");
-		send_message(recieved);
+	if (!message_in_register(&received->messageId)) {
+		// printf("*>> Rebroadcasting\r\n");
+		receiver(received);
+		send_message(received);
 	}
 }
 /*---------------------------------------------------------------------------*/
@@ -245,8 +277,6 @@ PROCESS_THREAD(broadcast_process, ev, data)
 {
 	static struct etimer periodic_timer;
 	static struct etimer send_timer;
-	message_t message;
-	static uint32_t messagesSent = 0;
 
 	PROCESS_BEGIN();
 
@@ -273,7 +303,8 @@ PROCESS_THREAD(broadcast_process, ev, data)
 
 	simple_udp_register(&broadcast_connection, UDP_PORT,
 											NULL, UDP_PORT,
-											receiver);
+											raw_receiver);
+
 
 	etimer_set(&periodic_timer, SEND_INTERVAL);
 	while(1) {
@@ -283,13 +314,8 @@ PROCESS_THREAD(broadcast_process, ev, data)
 
 		PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&send_timer));
 		
-		message.messageId.id = messagesSent;
-		copy_compact_address(&message.messageId.addr, &tagAddress);
-		message.contents = packetRegisterHead;
-		message.hops = 0;
-
-		printf("[Broadcasting]\r\n");
-		send_message(&message);
+		// printf("[Broadcasting]\r\n");
+		send_message(sender());
 
 		messagesSent++;
 	}
