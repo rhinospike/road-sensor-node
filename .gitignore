@@ -128,3 +128,5 @@ platform/galileo/bsp/grub/bin/
 *.galileo.dll
 *.galileo.efi
 LOG_OPENOCD
+
+venv/

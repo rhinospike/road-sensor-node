@@ -1,0 +1,4 @@
+spidev
+py-opc
+requests
+pyserial
