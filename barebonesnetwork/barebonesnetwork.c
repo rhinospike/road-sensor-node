@@ -41,7 +41,7 @@
 #define DEBUG DEBUG_PRINT
 #include "net/ip/uip-debug.h"
 
-#include "simple-udp.h"
+#include "net/ip/simple-udp.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -50,6 +50,23 @@
 #include "dev/leds.h"
 #include "board-peripherals.h"
 #include "ti-lib.h"
+
+
+#include "contiki.h"
+#include <stdio.h>
+#include "dev/leds.h"
+#include "sensortag/board-peripherals.h"
+#include "sensortag/cc2650/board.h"
+#include "lib/cc26xxware/driverlib/gpio.h"
+#include "ti-lib.h"
+#include "driverlib/aux_adc.h"
+#include "driverlib/aux_wuc.h"
+#include "sys/etimer.h"
+#include "sys/ctimer.h"
+#include "dev/watchdog.h"
+#include "random.h"
+#include "board-peripherals.h"
+#include <stdint.h>
 
 #define UDP_PORT 1234
 
@@ -151,10 +168,33 @@ shift_decimal(int val, int places, reading_t* result)
 	result->set = true;
 }
 
+uint16_t get_gas_value(void) {
+	uint16_t singleSampleADC;
+	//intialisation of ADC
+	ti_lib_aon_wuc_aux_wakeup_event(AONWUC_AUX_WAKEUP);
+	while(!(ti_lib_aon_wuc_power_status_get() & AONWUC_AUX_POWER_ON)) { }
+	// Enable clock for ADC digital and analog interface (not currently enabled in driver)
+	// Enable clocks
+	ti_lib_aux_wuc_clock_enable(AUX_WUC_ADI_CLOCK | AUX_WUC_ANAIF_CLOCK | AUX_WUC_SMPH_CLOCK);
+	while(ti_lib_aux_wuc_clock_status(AUX_WUC_ADI_CLOCK | AUX_WUC_ANAIF_CLOCK | AUX_WUC_SMPH_CLOCK) != AUX_WUC_CLOCK_READY) { }
+	// Connect AUX IO7 (DIO23, but also DP2 on XDS110) as analog input.
+	AUXADCSelectInput(ADC_COMPB_IN_AUXIO6); 
+	// Set up ADC range
+	// AUXADC_REF_FIXED = nominally 4.3 V
+	AUXADCEnableSync(AUXADC_REF_FIXED,  AUXADC_SAMPLE_TIME_2P7_US, AUXADC_TRIGGER_MANUAL);
+	//Trigger ADC converting
+	AUXADCGenManualTrigger();
+	//reading adc value
+	singleSampleADC = AUXADCReadFifo();
+	//shut the adc down
+	AUXADCDisable();
+	return singleSampleADC;
+}
+
 static void
 sensors_handler(process_data_t data)
 {
-	static reading_t lum_val, ir_obj_val, ir_amb_val;
+	static reading_t lum_val, ir_obj_val, ir_amb_val, gas_val;
 	static message_t message;
 
 	if (data == &opt_3001_sensor) {
@@ -170,14 +210,18 @@ sensors_handler(process_data_t data)
 		lum_val.set = false;
 		ir_obj_val.set = false;
 		ir_amb_val.set = false;
-
+		uint16_t gas_voltage = get_gas_value();
+		gas_val.whole = gas_voltage / 1000;
+		gas_val.frac = gas_voltage % 1000;
 		snprintf(message.contents, MESSAGE_LENGTH, "{"
 			"\"sensorid\": %04lx%08lx,"
+			"\"gasmv\": %ld.%02d,"
 			"\"luminance\": %ld.%02d,"
 			"\"ambienttemp\": %ld.%02d,"
 			"\"objecttemp\": %ld.%02d"
 			"}",
 			tagAddress.upper & 0xFFFF, tagAddress.lower,
+			gas_val.whole, gas_val.frac,
 			lum_val.whole, lum_val.frac,
 			ir_amb_val.whole, ir_amb_val.frac,
 			ir_obj_val.whole, ir_obj_val.frac);
