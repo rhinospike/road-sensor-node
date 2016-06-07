@@ -7,7 +7,7 @@ android {
     defaultConfig {
         applicationId "com.example.eric.roadsidemonitoringapp"
         minSdkVersion 19
-        targetSdkVersion 23
+        targetSdkVersion 19
         versionCode 1
         versionName "1.0"
     }
@@ -28,4 +28,5 @@ dependencies {
     testCompile 'junit:junit:4.12'
     compile 'com.android.support:appcompat-v7:23.3.0'
     compile 'com.github.PhilJay:MPAndroidChart:v2.1.6'
+    compile 'com.android.support:support-v4:23.3.0'
 }

@@ -1,98 +1,121 @@
 package com.example.eric.roadsidemonitoringapp;
 
-import android.os.AsyncTask;
-import android.os.Build;
+import android.app.Fragment;
+import android.app.FragmentManager;
+import android.app.FragmentTransaction;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.widget.Toolbar;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
+import android.view.View;
 
-import com.github.mikephil.charting.charts.LineChart;
-import com.github.mikephil.charting.data.Entry;
-import com.github.mikephil.charting.data.LineData;
-import com.github.mikephil.charting.data.LineDataSet;
+public class MainActivity extends AppCompatActivity implements GraphFragment.OnFragmentInteractionListener,
+        HeatMapFragment.OnFragmentInteractionListener, FetchFragment.OnFragmentInteractionListener {
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.ArrayList;
-
-public class MainActivity extends AppCompatActivity {
+    private static final String FETCH_FRAGMENT_ID = "com.example.eric.roadsidemonitoringapp.fetchFragmentID";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        System.out.println("STARTING GRAPHING");
+        Toolbar myToolbar = (Toolbar) findViewById(R.id.main_activity_menu);
+        setSupportActionBar(myToolbar);
 
-        LineChart lineChart = (LineChart) findViewById(R.id.chart);
-        // creating list of entry
-        ArrayList<Entry> entries = new ArrayList<>();
-        entries.add(new Entry(4f, 0));
-        entries.add(new Entry(8f, 1));
-        entries.add(new Entry(6f, 2));
-        entries.add(new Entry(2f, 3));
-        entries.add(new Entry(18f, 4));
-        entries.add(new Entry(9f, 5));
+        FragmentManager fragmentManager = getFragmentManager();
+        FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
 
-        LineDataSet dataset = new LineDataSet(entries, "# of Calls");
+        FetchFragment fetchFragment = FetchFragment.newInstance();
+        fetchFragment.registerForEvents(this);
 
-        // creating labels
-        ArrayList<String> labels = new ArrayList<String>();
-        labels.add("January");
-        labels.add("February");
-        labels.add("March");
-        labels.add("April");
-        labels.add("May");
-        labels.add("June");
+        HeatMapFragment heatMapFragment = (HeatMapFragment)fragmentManager.findFragmentById(R.id.heatMap);
+        heatMapFragment.registerForEvents(this);
 
-        LineData data = new LineData(labels, dataset);
-        lineChart.setData(data); // set the data and list of lables into chart
+        GraphFragment graphFragment = (GraphFragment)fragmentManager.findFragmentById(R.id.graph);
+        graphFragment.registerForEvents(this);
 
-        lineChart.setDescription("Description");  // set the description
+        fragmentTransaction.add(fetchFragment, FETCH_FRAGMENT_ID);
 
-        System.out.println("FINISHED GRAPHING");
+        fragmentTransaction.commit();
+    }
 
-        AsyncTask<Void,Void,Void> myTask = new AsyncTask<Void,Void,Void>() {
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu items for use in the action bar
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.main_activity_menu, menu);
+        return true;
+    }
 
-            @Override
-            protected Void doInBackground(Void... arg0) {
-                System.out.println("ASYNC TASK REPORTING");
+    @Override
+    protected void onStart() {
+        super.onStart();
+        setViewMode(0);
+    }
 
-                try {
-                    // Create a URL for the desired page
-                    URL url = new URL("https://road-sensor-db.herokuapp.com/readings");
-                    // Read all the text returned by the server
-                    BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
-                    String str;
-                    System.out.println("!!!!!!! OUTPUTING WEB CONTENTS !!!!!!!");
-                    while ((str = in.readLine()) != null) {
-                        //str = in.readLine().toString();
-                        System.out.println(str);
-                        // str is one line of text; readLine() strips the newline character(s)
-                    }
-                    System.out.println("!!!!!!! OUTPUTING WEB CONTENTS !!!!!!!");
-                    in.close();
+    private void setViewMode(int viewMode) {
+        switch(viewMode) {
+            case 0:
+                findViewById(R.id.graph).setVisibility(View.VISIBLE);
+                findViewById(R.id.heatMap).setVisibility(View.GONE);
+                return;
 
-                    } catch (MalformedURLException e) {
-                        System.out.println("MALFORMED URL EXCEPTION");
-                    } catch (IOException e) {
-                        System.out.println("IO EXCEPTION");
-                    }
-                    return null;
-            }
-        };
-        if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.HONEYCOMB) {
-            myTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-        } else {
-            myTask.execute();
+            case 1:
+                findViewById(R.id.graph).setVisibility(View.GONE);
+                findViewById(R.id.heatMap).setVisibility(View.VISIBLE);
+                return;
         }
+    }
 
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.action_graph:
+                // User chose the "Settings" item, show the app settings UI...
+                setViewMode(0);
+                return true;
+
+            case R.id.action_heat_map:
+                // User chose the "Favorite" action, mark the current item
+                // as a favorite...
+                setViewMode(1);
+                return true;
+
+            case R.id.action_reset:
+                FragmentManager fragmentManager = getFragmentManager();
+                FetchFragment fetchFragment = (FetchFragment)fragmentManager.findFragmentByTag(FETCH_FRAGMENT_ID);
+                fetchFragment.reset();
+                return true;
+
+            default:
+                // If we got here, the user's action was not recognized.
+                // Invoke the superclass to handle it.
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+    public void onFragmentNeedsDataSource(GraphFragment graphFragment) {
+        System.out.println("Fragment needs data source called");
+        FragmentManager fragmentManager = getFragmentManager();
+        FetchFragment fetchFragment = (FetchFragment)fragmentManager.findFragmentByTag(FETCH_FRAGMENT_ID);
+        graphFragment.setDataSource(fetchFragment);
+    }
+
+    public void onFragmentNeedsDataSource(HeatMapFragment heatMapFragment) {
+        System.out.println("Fragment needs data source called");
+        FragmentManager fragmentManager = getFragmentManager();
+        FetchFragment fetchFragment = (FetchFragment)fragmentManager.findFragmentByTag(FETCH_FRAGMENT_ID);
+        heatMapFragment.setDataSource(fetchFragment);
+    }
+
+    public void onFragmentDidGetData() {
+        FragmentManager fragmentManager = getFragmentManager();
+        GraphFragment graphFragment = (GraphFragment)fragmentManager.findFragmentById(R.id.graph);
+        onFragmentNeedsDataSource(graphFragment);
+        HeatMapFragment heatMapFragment = (HeatMapFragment)fragmentManager.findFragmentById(R.id.heatMap);
+        onFragmentNeedsDataSource(heatMapFragment);
     }
 }
 

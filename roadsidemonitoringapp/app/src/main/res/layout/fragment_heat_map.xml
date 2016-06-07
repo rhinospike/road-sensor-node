@@ -1,0 +1,61 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res/com.example.eric.roadsidemonitoringapp"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.example.eric.roadsidemonitoringapp.HeatMapFragment">
+
+    <SeekBar
+        android:id="@+id/seek_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+    
+    <com.example.eric.roadsidemonitoringapp.HeatMapView
+        android:id="@+id/heat_map_view"
+        android:layout_width="match_parent"
+        android:layout_height="500dp" />
+
+    <CheckBox
+        android:text="Dust"
+        android:id="@+id/show_dust"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Gas"
+        android:id="@+id/show_gas"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Humidity"
+        android:id="@+id/show_humidity"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Temperature (Humidity Sensor)"
+        android:id="@+id/show_humidity_temp"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Ambient Temperature (IR Sensor)"
+        android:id="@+id/show_ambient_temp"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Object Temperature (IR Sensor)"
+        android:id="@+id/show_object_temp"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Luminance"
+        android:id="@+id/show_luminance"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+</LinearLayout>
