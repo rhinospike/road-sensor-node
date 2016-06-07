@@ -4,7 +4,6 @@ all: $(CONTIKI_PROJECT)
 
 TARGET = srf06-cc26xx
 BOARD = sensortag/cc2650
-
 CONTIKI = $(HOME)/repos/contiki
 CONTIKI_WITH_IPV6 = 1
 #UIP_CONF_ROUTER = 0
@@ -26,3 +25,4 @@ progu:
 tags:
 	ctags -R . $(CONTIKI)
 	$(MAKE) $(CONTIKI_PROJECT) -n | awk '/$(CONTIKI_PROJECT)/{i++}i==2' | sed -e 's/ -/\n-/g' | tail -n +2 > .syntastic_c_config
+	~/.vim/plugged/YCM-Generator/config_gen.py . -M="-i -j4 CC='clang -Werror -Wextra' LD=clang"
