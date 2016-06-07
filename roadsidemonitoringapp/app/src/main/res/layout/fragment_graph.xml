@@ -1,0 +1,61 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context="com.example.eric.roadsidemonitoringapp.GraphFragment">
+
+    <Spinner
+        android:id="@+id/sensor_spinner"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content" />
+
+    <com.github.mikephil.charting.charts.ScatterChart
+        android:id="@+id/chart"
+        android:layout_width="match_parent"
+        android:layout_height="500dp" />
+
+    <CheckBox
+        android:text="Dust"
+        android:id="@+id/show_dust"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Gas"
+        android:id="@+id/show_gas"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Humidity"
+        android:id="@+id/show_humidity"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Temperature (Humidity Sensor)"
+        android:id="@+id/show_humidity_temp"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Ambient Temperature (IR Sensor)"
+        android:id="@+id/show_ambient_temp"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Object Temperature (IR Sensor)"
+        android:id="@+id/show_object_temp"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+    <CheckBox
+        android:text="Luminance"
+        android:id="@+id/show_luminance"
+        android:layout_width="match_parent"
+        android:layout_height="20dp" />
+
+
+</LinearLayout>
