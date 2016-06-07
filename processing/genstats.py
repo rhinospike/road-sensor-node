@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import requests
 import datetime
+import numpy as np
+from matplotlib import pyplot as plt
 
 url = 'https://road-sensor-db.herokuapp.com'
 
@@ -10,6 +12,7 @@ data = r.json()
 
 sensorTotals = {}
 avgHops = {}
+hopDist = {}
 maxHops = 0
 messageids = {}
 firstTransmission = {}
@@ -21,6 +24,11 @@ for reading in data:
     hops = reading['hops']
     messageid = reading['messageid']
     timestamp = reading['timestamp']
+
+    if hops in hopDist:
+        hopDist[hops] += 1
+    else:
+        hopDist[hops] = 1
 
     if hops > maxHops:
         maxHops = hops
@@ -69,8 +77,10 @@ for sensor in messageids.keys():
         print(splitids)
 
 print(sensorTotals)
-print(avgHops)
+print(avgHops.values())
+print(successrates.values())
 print(maxHops)
+print(hopDist)
 print('Sensor\tExpected\tReceived\tSuccess\tAvg. Hops\tFirst\tLast')
 for sensor in expectedpackets.keys():
     print('{0}\t{1}\t{2}\t{3:.2f}%\t{4:.2f}\t{5}\t{6}'.format(
@@ -81,3 +91,17 @@ for sensor in expectedpackets.keys():
         avgHops[sensor],
         str(firstTransmission[sensor]),
         str(lastTransmission[sensor])))
+
+fig, ax = plt.subplots()
+rects = ax.bar(hopDist.keys(), hopDist.values())
+ax.set_title('Packet Hop Distribution')
+ax.set_ylabel('Packets')
+ax.set_xlabel('Hops')
+
+fig, ax = plt.subplots()
+ax.scatter([float(a) for a in avgHops.values()], [float(s) for s in successrates.values()])
+ax.set_title('Average Hops vs. Success Rate')
+ax.set_xlabel('Average Hops')
+ax.set_ylabel('Success Rate')
+
+plt.show()
