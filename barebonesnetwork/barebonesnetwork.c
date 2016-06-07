@@ -56,9 +56,26 @@
 #define SEND_INTERVAL		(5 * CLOCK_SECOND)
 #define SEND_TIME		(random_rand() % (SEND_INTERVAL))
 
-#define MESSAGE_LENGTH 128
-
 static struct simple_udp_connection broadcast_connection;
+
+char* reading_type_names[] =
+{
+	"luminance",
+	"irtempambient",
+	"irtempobject",
+	"humidity",
+	"humiditytemp",
+	"-"
+};
+
+typedef enum {
+	READING_TYPE_LUMINANCE,
+	READING_TYPE_IR_TEMP_AMBIENT,
+	READING_TYPE_IR_TEMP_OBJECT,
+	READING_TYPE_HUMIDITY,
+	READING_TYPE_HUMIDITY_TEMP,
+	READING_TYPE_LAST
+} reading_type;
 
 typedef struct _compact_addr {
 	uint32_t upper;
@@ -70,17 +87,17 @@ typedef struct _message_id {
 	uint32_t id;
 } message_id_t;
 
-typedef struct _message {
-	message_id_t messageId;
-	uint32_t hops;
-	char contents[MESSAGE_LENGTH];
-} message_t;
-
 typedef struct _reading {
 	int32_t whole;
 	uint16_t frac;
-	bool set;
 } reading_t;
+
+typedef struct _message {
+	message_id_t messageId;
+	int32_t hops;
+	reading_t readings[READING_TYPE_LAST];
+} message_t;
+
 
 static bool
 message_in_register(message_id_t *messageId);
@@ -135,59 +152,83 @@ activate_sensors(void *not_used)
 {
 	SENSORS_ACTIVATE(opt_3001_sensor);
 	SENSORS_ACTIVATE(tmp_007_sensor);
+	SENSORS_ACTIVATE(hdc_1000_sensor);
 }
 
+// Formats with 3 decimal places
 static void
 shift_decimal(int val, int places, reading_t* result)
 {
-	int divisor = 1;
+	int i, divisor = 1;
 
-	while (places-- > 0) {
+	for (i = 0; i < places; i++)
+	{
 		divisor *= 10;
 	}
 
 	result->whole = val / divisor;
-	result->frac = (val % divisor) / (divisor / 100);
-	result->set = true;
+	result->frac = val % divisor;
+
+	for (i = 0; i < 3 - places; i++)
+	{
+		result->frac *= 10;
+	}
+}
+
+static void
+print_message(message_t* m)
+{
+	printf("{"
+		"\"sensorid\": %04lx%08lx,"
+		"\"messageid\": %d,"
+		"\"hops\": %d",
+		m->messageId.addr.upper & 0xFFFF, m->messageId.addr.lower,
+		m->messageId.id,
+		m->hops);
+
+	int i;
+	for (i = 0; i < READING_TYPE_LAST; i++)
+	{
+		printf(",\"%s\": %ld.%03d",
+			reading_type_names[i],
+			m->readings[i].whole,
+			m->readings[i].frac);
+	}
+	printf("}\r\n");
 }
 
 static void
 sensors_handler(process_data_t data)
 {
-	static reading_t lum_val, ir_obj_val, ir_amb_val;
 	static message_t message;
+	static bool ir_set = false, hdc_set = false, lum_set = false;
 
 	if (data == &opt_3001_sensor) {
-		shift_decimal(opt_3001_sensor.value(0), 2, &lum_val);
+		shift_decimal(opt_3001_sensor.value(0), 2, &message.readings[READING_TYPE_LUMINANCE]);
+		lum_set = true;
 	} else if (data == &tmp_007_sensor) {
 		tmp_007_sensor.value(TMP_007_SENSOR_TYPE_ALL);
-		shift_decimal(tmp_007_sensor.value(TMP_007_SENSOR_TYPE_AMBIENT), 3, &ir_amb_val);
-		shift_decimal(tmp_007_sensor.value(TMP_007_SENSOR_TYPE_OBJECT), 3, &ir_obj_val);
+		shift_decimal(tmp_007_sensor.value(TMP_007_SENSOR_TYPE_AMBIENT), 3, &message.readings[READING_TYPE_IR_TEMP_AMBIENT]);
+		shift_decimal(tmp_007_sensor.value(TMP_007_SENSOR_TYPE_OBJECT), 3, &message.readings[READING_TYPE_IR_TEMP_OBJECT]);
+		ir_set = true;
+	} else if (data == &hdc_1000_sensor) {
+		shift_decimal(hdc_1000_sensor.value(HDC_1000_SENSOR_TYPE_HUMIDITY), 2, &message.readings[READING_TYPE_HUMIDITY]);
+		shift_decimal(hdc_1000_sensor.value(HDC_1000_SENSOR_TYPE_TEMP), 2, &message.readings[READING_TYPE_HUMIDITY_TEMP]);
+		hdc_set = true;
 	}
 
-	if (lum_val.set && ir_obj_val.set && ir_amb_val.set)
+	if (ir_set && lum_set && hdc_set)
 	{
-		lum_val.set = false;
-		ir_obj_val.set = false;
-		ir_amb_val.set = false;
-
-		snprintf(message.contents, MESSAGE_LENGTH, "{"
-			"\"sensorid\": %04lx%08lx,"
-			"\"luminance\": %ld.%02d,"
-			"\"ambienttemp\": %ld.%02d,"
-			"\"objecttemp\": %ld.%02d"
-			"}",
-			tagAddress.upper & 0xFFFF, tagAddress.lower,
-			lum_val.whole, lum_val.frac,
-			ir_amb_val.whole, ir_amb_val.frac,
-			ir_obj_val.whole, ir_obj_val.frac);
-
-		// Print message so basestation can process it
-		printf("%s\r\n", message.contents);
+		lum_set = false;
+		ir_set = false;
+		hdc_set = false;
 
 		message.hops = 0;
 		message.messageId.id = messagesSent;
 		copy_compact_address(&message.messageId.addr, &tagAddress);
+
+		// Print message so basestation can process it
+		print_message(&message);
 
 		// printf("[Broadcasting]\r\n");
 		send_message(&message);
@@ -208,8 +249,11 @@ receiver(message_t *message) {
 	/* Process the message */
 	printf("[Received] ");
 	print_compact_address(&message->messageId.addr);
-	printf(" ID: %lu, Hops: %lu:\r\n %s\r\n",
-		message->messageId.id, message->hops, message->contents);
+	printf(":\r\n");
+	//printf(" ID: %lu, Hops: %lu:\r\n",
+	//	message->messageId.id, message->hops);
+	print_message(message);
+	printf("\r\n");
 }
 
 /*---------------------------------------------------------------------------*/
