@@ -15,7 +15,7 @@ erase:
 	$(HOME)/uniflash_3.4/uniflash.sh -ccxml ~/Downloads/sensortag.ccxml -targetOp reset -operation Erase
 
 prog:
-	DSLite load -c ~/repos/csse4011-s4321490/sensortag.ccxml -f $(CONTIKI_PROJECT).elf
+	DSLite load -c sensortag.ccxml -f $(CONTIKI_PROJECT).elf
 
 progu:
 	$(HOME)/uniflash_3.4/uniflash.sh -ccxml ~/Downloads/sensortag.ccxml -targetOp reset -operation Erase
