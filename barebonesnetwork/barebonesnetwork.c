@@ -37,7 +37,6 @@
 
 #include "lib/random.h"
 #include "sys/ctimer.h"
-#include "sys/etimer.h"
 
 #define DEBUG DEBUG_PRINT
 #include "net/ip/uip-debug.h"
@@ -49,12 +48,15 @@
 #include <string.h>
 
 #include "dev/leds.h"
-
+#include "board-peripherals.h"
+#include "ti-lib.h"
 
 #define UDP_PORT 1234
 
 #define SEND_INTERVAL		(5 * CLOCK_SECOND)
 #define SEND_TIME		(random_rand() % (SEND_INTERVAL))
+
+#define MESSAGE_LENGTH 128
 
 static struct simple_udp_connection broadcast_connection;
 
@@ -70,9 +72,15 @@ typedef struct _message_id {
 
 typedef struct _message {
 	message_id_t messageId;
-	uint32_t contents;
 	uint32_t hops;
+	char contents[MESSAGE_LENGTH];
 } message_t;
+
+typedef struct _reading {
+	int32_t whole;
+	uint16_t frac;
+	bool set;
+} reading_t;
 
 static bool
 message_in_register(message_id_t *messageId);
@@ -120,6 +128,77 @@ static bool didWrap = false;
 static compact_addr_t tagAddress;
 static uint32_t messagesSent = 0;
 
+static struct ctimer sensor_read_timer;
+
+static void
+activate_sensors(void *not_used)
+{
+	SENSORS_ACTIVATE(opt_3001_sensor);
+	SENSORS_ACTIVATE(tmp_007_sensor);
+}
+
+static void
+shift_decimal(int val, int places, reading_t* result)
+{
+	int divisor = 1;
+
+	while (places-- > 0) {
+		divisor *= 10;
+	}
+
+	result->whole = val / divisor;
+	result->frac = (val % divisor) / (divisor / 100);
+	result->set = true;
+}
+
+static void
+sensors_handler(process_data_t data)
+{
+	static reading_t lum_val, ir_obj_val, ir_amb_val;
+	static message_t message;
+
+	if (data == &opt_3001_sensor) {
+		shift_decimal(opt_3001_sensor.value(0), 2, &lum_val);
+	} else if (data == &tmp_007_sensor) {
+		tmp_007_sensor.value(TMP_007_SENSOR_TYPE_ALL);
+		shift_decimal(tmp_007_sensor.value(TMP_007_SENSOR_TYPE_AMBIENT), 3, &ir_amb_val);
+		shift_decimal(tmp_007_sensor.value(TMP_007_SENSOR_TYPE_OBJECT), 3, &ir_obj_val);
+	}
+
+	if (lum_val.set && ir_obj_val.set && ir_amb_val.set)
+	{
+		lum_val.set = false;
+		ir_obj_val.set = false;
+		ir_amb_val.set = false;
+
+		snprintf(message.contents, MESSAGE_LENGTH, "{"
+			"\"sensorid\": %04lx%08lx,"
+			"\"luminance\": %ld.%02d,"
+			"\"ambienttemp\": %ld.%02d,"
+			"\"objecttemp\": %ld.%02d"
+			"}",
+			tagAddress.upper & 0xFFFF, tagAddress.lower,
+			lum_val.whole, lum_val.frac,
+			ir_amb_val.whole, ir_amb_val.frac,
+			ir_obj_val.whole, ir_obj_val.frac);
+
+		// Print message so basestation can process it
+		printf("%s\r\n", message.contents);
+
+		message.hops = 0;
+		message.messageId.id = messagesSent;
+		copy_compact_address(&message.messageId.addr, &tagAddress);
+
+		// printf("[Broadcasting]\r\n");
+		send_message(&message);
+
+		messagesSent++;
+
+		//Callback timer for temp sensor
+		ctimer_set(&sensor_read_timer, SEND_INTERVAL + SEND_TIME, activate_sensors, NULL);
+	}
+}
+
 /*---------------------------------------------------------------------------*/
 PROCESS(broadcast_process, "UDP broadcast example process");
 AUTOSTART_PROCESSES(&resolv_process, &broadcast_process);
@@ -129,21 +208,10 @@ receiver(message_t *message) {
 	/* Process the message */
 	printf("[Received] ");
 	print_compact_address(&message->messageId.addr);
-	printf(" ID: %lu, M-Index: %lu Hops: %lu\r\n",
-			message->messageId.id, message->contents, message->hops);
+	printf(" ID: %lu, Hops: %lu:\r\n %s\r\n",
+		message->messageId.id, message->hops, message->contents);
 }
 
-static message_t*
-sender(void) {
-	static 	message_t message;
-
-	message.messageId.id = messagesSent;
-	copy_compact_address(&message.messageId.addr, &tagAddress);
-	message.contents = packetRegisterHead;
-	message.hops = 0; // Hops incremented every time the message is sent.
-
-	return &message;
-}
 /*---------------------------------------------------------------------------*/
 static void
 raw_receiver(struct simple_udp_connection *c,
@@ -277,9 +345,6 @@ send_message(message_t *message) {
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(broadcast_process, ev, data)
 {
-	static struct etimer periodic_timer;
-	static struct etimer send_timer;
-
 	PROCESS_BEGIN();
 
 	/* Configure radio */
@@ -309,19 +374,17 @@ PROCESS_THREAD(broadcast_process, ev, data)
 			NULL, UDP_PORT,
 			raw_receiver);
 
+	activate_sensors(NULL);
 
-	etimer_set(&periodic_timer, SEND_INTERVAL);
 	while(1) {
-		PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&periodic_timer));
-		etimer_reset(&periodic_timer);
-		etimer_set(&send_timer, SEND_TIME);
+		PROCESS_YIELD(); // Let other threads run
 
-		PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&send_timer));
+		// Wait for sensor event
+		if (ev == sensors_event)
+		{
+			sensors_handler(data);
+		}
 
-		// printf("[Broadcasting]\r\n");
-		send_message(sender());
-
-		messagesSent++;
 	}
 
 	PROCESS_END();
