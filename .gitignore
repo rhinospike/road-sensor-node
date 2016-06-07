@@ -130,3 +130,5 @@ platform/galileo/bsp/grub/bin/
 LOG_OPENOCD
 
 venv/
+venv2/
+TagLocations/
