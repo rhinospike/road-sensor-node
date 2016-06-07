@@ -100,12 +100,12 @@ send_message(message_t *message);
 
 static void
 raw_receiver(struct simple_udp_connection *c,
-		 const uip_ipaddr_t *sender_addr,
-		 uint16_t sender_port,
-		 const uip_ipaddr_t *receiver_addr,
-		 uint16_t receiver_port,
-		 const uint8_t *data,
-		 uint16_t datalen);
+		const uip_ipaddr_t *sender_addr,
+		uint16_t sender_port,
+		const uip_ipaddr_t *receiver_addr,
+		uint16_t receiver_port,
+		const uint8_t *data,
+		uint16_t datalen);
 
 /* Array for storing all previously seen ip addresses. Incoming addresses
  * are compared against this array to generate the address alias, since
@@ -127,10 +127,10 @@ AUTOSTART_PROCESSES(&resolv_process, &broadcast_process);
 static void
 receiver(message_t *message) {
 	/* Process the message */
-	printf("[Recieved] ");
+	printf("[Received] ");
 	print_compact_address(&message->messageId.addr);
 	printf(" ID: %lu, M-Index: %lu Hops: %lu\r\n",
-		message->messageId.id, message->contents, message->hops);
+			message->messageId.id, message->contents, message->hops);
 }
 
 static message_t*
@@ -147,21 +147,21 @@ sender(void) {
 /*---------------------------------------------------------------------------*/
 static void
 raw_receiver(struct simple_udp_connection *c,
-		 const uip_ipaddr_t *sender_addr,
-		 uint16_t sender_port,
-		 const uip_ipaddr_t *receiver_addr,
-		 uint16_t receiver_port,
-		 const uint8_t *data,
-		 uint16_t datalen)
+		const uip_ipaddr_t *sender_addr,
+		uint16_t sender_port,
+		const uip_ipaddr_t *receiver_addr,
+		uint16_t receiver_port,
+		const uint8_t *data,
+		uint16_t datalen)
 {
 	message_t *received;
 
 	if (datalen != sizeof(message_t)) {
-		printf("Incorrect incomign data size\r\n");
+		printf("Incorrect incoming data size\r\n");
 		return;
 	}
 
-	leds_toggle(LEDS_GREEN);
+	leds_on(LEDS_GREEN);
 
 	received = (message_t *)data;
 
@@ -177,12 +177,13 @@ raw_receiver(struct simple_udp_connection *c,
 		receiver(received);
 		send_message(received);
 	}
+	leds_off(LEDS_GREEN);
 }
 /*---------------------------------------------------------------------------*/
 static void
 set_global_address(void)
 {
-    uip_ipaddr_t ipaddr;
+	uip_ipaddr_t ipaddr;
 
 	uip_ip6addr(&ipaddr, 0xaaaa, 0, 0, 0, 0, 0, 0, 0);
 	uip_ds6_set_addr_iid(&ipaddr, &uip_lladdr);
@@ -212,7 +213,7 @@ message_in_register(message_id_t *messageId) {
 	bool searchWrapped = false;
 
 	// print_compact_address(&messageId->addr);
-	// printf(" message id: %lu \r\n", messageId->id);	
+	// printf(" message id: %lu \r\n", messageId->id);
 
 	while ((searchTarget >= 0 && !searchWrapped) ||
 			(searchTarget > packetRegisterHead && searchWrapped)) {
@@ -222,7 +223,7 @@ message_in_register(message_id_t *messageId) {
 		// printf(" message id: %lu \r\n", targetMessage->id);
 		if (targetMessage->id == messageId->id &&
 				compact_addresses_match(&targetMessage->addr,
-				&messageId->addr)) {
+					&messageId->addr)) {
 			return true;
 		}
 
@@ -263,14 +264,15 @@ print_compact_address(compact_addr_t *addr) {
 static void
 send_message(message_t *message) {
 	uip_ipaddr_t addr; /* The BROADCAST address.
-	                      (Not the address of the ST) */
+			      (Not the address of the ST) */
 
+	leds_on(LEDS_RED);
 	add_message_to_register(&message->messageId);
 
-	leds_toggle(LEDS_RED);
 	message->hops++;
-	uip_create_linklocal_allnodes_mcast(&addr);	
+	uip_create_linklocal_allnodes_mcast(&addr);
 	simple_udp_sendto(&broadcast_connection, message, sizeof(message_t), &addr);
+	leds_off(LEDS_RED);
 }
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(broadcast_process, ev, data)
@@ -280,15 +282,17 @@ PROCESS_THREAD(broadcast_process, ev, data)
 
 	PROCESS_BEGIN();
 
-    /* Configure radio */
-    NETSTACK_RADIO.set_value(RADIO_PARAM_TXPOWER, 5);
-    NETSTACK_RADIO.set_value(RADIO_PARAM_CHANNEL, 18);
+	/* Configure radio */
+	int maxpower;
+	NETSTACK_RADIO.get_value(RADIO_CONST_TXPOWER_MAX, &maxpower);
+	NETSTACK_RADIO.set_value(RADIO_PARAM_TXPOWER, maxpower);
+	NETSTACK_RADIO.set_value(RADIO_PARAM_CHANNEL, 18);
 
 	set_global_address();
 
 	uint32_t i, state;
 
-    for(i = 0; i < UIP_DS6_ADDR_NB; i++) {
+	for(i = 0; i < UIP_DS6_ADDR_NB; i++) {
 		state = uip_ds6_if.addr_list[i].state;
 		if(uip_ds6_if.addr_list[i].isused &&
 				(state == ADDR_TENTATIVE || state == ADDR_PREFERRED)) {
@@ -302,8 +306,8 @@ PROCESS_THREAD(broadcast_process, ev, data)
 	printf("\r\n");
 
 	simple_udp_register(&broadcast_connection, UDP_PORT,
-											NULL, UDP_PORT,
-											raw_receiver);
+			NULL, UDP_PORT,
+			raw_receiver);
 
 
 	etimer_set(&periodic_timer, SEND_INTERVAL);
@@ -313,7 +317,7 @@ PROCESS_THREAD(broadcast_process, ev, data)
 		etimer_set(&send_timer, SEND_TIME);
 
 		PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&send_timer));
-		
+
 		// printf("[Broadcasting]\r\n");
 		send_message(sender());
 
