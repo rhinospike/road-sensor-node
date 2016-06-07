@@ -41,7 +41,7 @@
 #define DEBUG DEBUG_PRINT
 #include "net/ip/uip-debug.h"
 
-#include "simple-udp.h"
+#include "net/ip/simple-udp.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -50,6 +50,23 @@
 #include "dev/leds.h"
 #include "board-peripherals.h"
 #include "ti-lib.h"
+
+
+#include "contiki.h"
+#include <stdio.h>
+#include "dev/leds.h"
+#include "sensortag/board-peripherals.h"
+#include "sensortag/cc2650/board.h"
+#include "lib/cc26xxware/driverlib/gpio.h"
+#include "ti-lib.h"
+#include "driverlib/aux_adc.h"
+#include "driverlib/aux_wuc.h"
+#include "sys/etimer.h"
+#include "sys/ctimer.h"
+#include "dev/watchdog.h"
+#include "random.h"
+#include "board-peripherals.h"
+#include <stdint.h>
 
 #define UDP_PORT 1234
 
@@ -65,6 +82,7 @@ char* reading_type_names[] =
 	"irtempobject",
 	"humidity",
 	"humiditytemp",
+	"gas",
 	"-"
 };
 
@@ -74,6 +92,7 @@ typedef enum {
 	READING_TYPE_IR_TEMP_OBJECT,
 	READING_TYPE_HUMIDITY,
 	READING_TYPE_HUMIDITY_TEMP,
+	READING_TYPE_GAS,
 	READING_TYPE_LAST
 } reading_type;
 
@@ -189,12 +208,42 @@ print_message(message_t* m)
 	int i;
 	for (i = 0; i < READING_TYPE_LAST; i++)
 	{
+		if (i == READING_TYPE_GAS &&
+			m->readings[i].whole == 0 &&
+		       	m->readings[i].frac < 10)
+		{
+			continue;
+		}
+
 		printf(",\"%s\": %ld.%03d",
 			reading_type_names[i],
 			m->readings[i].whole,
 			m->readings[i].frac);
 	}
 	printf("}\r\n");
+}
+
+uint16_t get_gas_value(void) {
+	uint16_t singleSampleADC;
+	//intialisation of ADC
+	ti_lib_aon_wuc_aux_wakeup_event(AONWUC_AUX_WAKEUP);
+	while(!(ti_lib_aon_wuc_power_status_get() & AONWUC_AUX_POWER_ON)) { }
+	// Enable clock for ADC digital and analog interface (not currently enabled in driver)
+	// Enable clocks
+	ti_lib_aux_wuc_clock_enable(AUX_WUC_ADI_CLOCK | AUX_WUC_ANAIF_CLOCK | AUX_WUC_SMPH_CLOCK);
+	while(ti_lib_aux_wuc_clock_status(AUX_WUC_ADI_CLOCK | AUX_WUC_ANAIF_CLOCK | AUX_WUC_SMPH_CLOCK) != AUX_WUC_CLOCK_READY) { }
+	// Connect AUX IO7 (DIO23, but also DP2 on XDS110) as analog input.
+	AUXADCSelectInput(ADC_COMPB_IN_AUXIO6); 
+	// Set up ADC range
+	// AUXADC_REF_FIXED = nominally 4.3 V
+	AUXADCEnableSync(AUXADC_REF_FIXED,  AUXADC_SAMPLE_TIME_2P7_US, AUXADC_TRIGGER_MANUAL);
+	//Trigger ADC converting
+	AUXADCGenManualTrigger();
+	//reading adc value
+	singleSampleADC = AUXADCReadFifo();
+	//shut the adc down
+	AUXADCDisable();
+	return singleSampleADC;
 }
 
 static void
@@ -222,6 +271,8 @@ sensors_handler(process_data_t data)
 		lum_set = false;
 		ir_set = false;
 		hdc_set = false;
+
+		shift_decimal(get_gas_value(), 3, &message.readings[READING_TYPE_GAS]);
 
 		message.hops = 0;
 		message.messageId.id = messagesSent;
