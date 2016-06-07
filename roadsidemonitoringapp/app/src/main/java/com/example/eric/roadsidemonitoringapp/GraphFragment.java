@@ -6,6 +6,7 @@ import android.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
@@ -79,6 +80,18 @@ public class GraphFragment extends Fragment {
                 android.R.layout.simple_spinner_item, spinnerArray); //selected item will look like a spinner set from XML
         spinnerArrayAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(spinnerArrayAdapter);
+        spinner.setOnItemSelectedListener(new Spinner.OnItemSelectedListener()
+        {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                updateGraph();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
 
         CheckBox dustCheckBox = (CheckBox)view.findViewById( R.id.show_dust);
         dustCheckBox.setChecked(showDust);
@@ -257,6 +270,9 @@ public class GraphFragment extends Fragment {
     }
 
     public void updateGraph() {
+
+        if (!(dataSource != null && dataSource.sensorData != null)) return;
+
         ScatterChart scatter = (ScatterChart)getView().findViewById(R.id.chart);
 
         Spinner sensorSpinner = (Spinner)getView().findViewById(R.id.sensor_spinner);
@@ -268,6 +284,8 @@ public class GraphFragment extends Fragment {
                 sensor = test;
             }
         }
+
+        if (sensor == null) return;
 
         ArrayList<ScatterDataSet> dataSets = new ArrayList<ScatterDataSet>();
 
