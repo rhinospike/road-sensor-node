@@ -1,0 +1,14 @@
+[Unit]
+Description=Road sensor network base station daemon
+After=network.target
+
+[Service]
+Type=simple
+User=alarm
+Group=users
+ExecStart=/home/alarm/repos/road-sensor-node/basestation/run.sh
+StandardOutput=syslog
+StandardError=syslog
+
+[Install]
+WantedBy=multi-user.target
